@@ -1,0 +1,10 @@
+node_modules
+dist
+dist-electron
+release
+.env
+.env.*
+.DS_Store
+package-lock.json
+bun.lockb
+*.log

@@ -3,6 +3,7 @@ import { useQueryClient } from "@tanstack/react-query"
 import { useEffect, useRef, useState } from "react"
 import Queue from "../_pages/Queue"
 import Solutions from "../_pages/Solutions"
+import BrowserView from "../_pages/BrowserView"
 import { useToast } from "../contexts/toast"
 
 interface SubscribedAppProps {
@@ -17,7 +18,7 @@ const SubscribedApp: React.FC<SubscribedAppProps> = ({
   setLanguage
 }) => {
   const queryClient = useQueryClient()
-  const [view, setView] = useState<"queue" | "solutions" | "debug">("queue")
+  const [view, setView] = useState<"queue" | "solutions" | "debug" | "browser">("queue")
   const containerRef = useRef<HTMLDivElement>(null)
   const { showToast } = useToast()
 
@@ -89,6 +90,13 @@ const SubscribedApp: React.FC<SubscribedAppProps> = ({
   // Listen for events that might switch views or show errors
   useEffect(() => {
     const cleanupFunctions = [
+      window.electronAPI.onToggleBrowserView((show: boolean) => {
+        if (show) {
+          setView("browser")
+        } else {
+          setView("queue")
+        }
+      }),
       window.electronAPI.onSolutionStart(() => {
         setView("solutions")
       }),
@@ -135,22 +143,26 @@ const SubscribedApp: React.FC<SubscribedAppProps> = ({
   }, [view])
 
   return (
-    <div ref={containerRef} className="min-h-0">
-      {view === "queue" ? (
+    <div ref={containerRef} className="min-h-0 h-full w-full">
+      {view === "queue" && (
         <Queue
           setView={setView}
           credits={credits}
           currentLanguage={currentLanguage}
           setLanguage={setLanguage}
         />
-      ) : view === "solutions" ? (
+      )}
+      {view === "solutions" && (
         <Solutions
           setView={setView}
           credits={credits}
           currentLanguage={currentLanguage}
           setLanguage={setLanguage}
         />
-      ) : null}
+      )}
+      <div style={{ display: view === "browser" ? "block" : "none", height: "100%", width: "100%" }}>
+        <BrowserView setView={setView} />
+      </div>
     </div>
   )
 }
