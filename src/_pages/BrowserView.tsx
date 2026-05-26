@@ -10,6 +10,7 @@ const BrowserView: React.FC<BrowserViewProps> = ({ setView }) => {
   const [isLoading, setIsLoading] = useState(true)
   const [pageTitle, setPageTitle] = useState("ChatGPT")
   const webviewRef = useRef<any>(null)
+  const webviewPartition = "persist:interview-coder-browser"
 
   // Handle webview events
   useEffect(() => {
@@ -181,6 +182,7 @@ const BrowserView: React.FC<BrowserViewProps> = ({ setView }) => {
         <webview
           ref={webviewRef}
           src={url}
+          partition={webviewPartition}
           style={{ width: "100%", height: "100%" }}
           // @ts-ignore - webview is an Electron-specific element
           allowpopups="true"

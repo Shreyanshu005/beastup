@@ -6,7 +6,7 @@ import { dracula } from "react-syntax-highlighter/dist/esm/styles/prism"
 import ScreenshotQueue from "../components/Queue/ScreenshotQueue"
 import SolutionCommands from "../components/Solutions/SolutionCommands"
 import { Screenshot } from "../types/screenshots"
-import { ComplexitySection, ContentSection } from "./Solutions"
+import { ComplexitySection, ContentSection, SolutionContentRenderer } from "./Solutions"
 import { useToast } from "../contexts/toast"
 
 const CodeSection = ({
@@ -32,22 +32,10 @@ const CodeSection = ({
       </div>
     ) : (
       <div className="w-full">
-        <SyntaxHighlighter
-          showLineNumbers
-          language={currentLanguage == "golang" ? "go" : currentLanguage}
-          style={dracula}
-          customStyle={{
-            maxWidth: "100%",
-            margin: 0,
-            padding: "1rem",
-            whiteSpace: "pre-wrap",
-            wordBreak: "break-all",
-            backgroundColor: "rgba(22, 27, 34, 0.5)"
-          }}
-          wrapLongLines={true}
-        >
-          {code as string}
-        </SyntaxHighlighter>
+        <SolutionContentRenderer
+          content={code as string}
+          fallbackLanguage={currentLanguage}
+        />
       </div>
     )}
   </div>
@@ -295,14 +283,21 @@ const Debug: React.FC<DebugProps> = ({
               content={
                 thoughtsData && (
                   <div className="space-y-3">
-                    <div className="space-y-1">
-                      {thoughtsData.map((thought, index) => (
-                        <div key={index} className="flex items-start gap-2">
-                          <div className="w-1 h-1 rounded-full bg-blue-400/80 mt-2 shrink-0" />
-                          <div>{thought}</div>
-                        </div>
-                      ))}
-                    </div>
+                    {thoughtsData.some((t) => t.includes("```")) ? (
+                      <SolutionContentRenderer
+                        content={thoughtsData.join("\n\n")}
+                        fallbackLanguage={currentLanguage}
+                      />
+                    ) : (
+                      <div className="space-y-1">
+                        {thoughtsData.map((thought, index) => (
+                          <div key={index} className="flex items-start gap-2">
+                            <div className="w-1 h-1 rounded-full bg-blue-400/80 mt-2 shrink-0" />
+                            <div>{thought}</div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
                   </div>
                 )
               }

@@ -12,6 +12,18 @@ import * as dotenv from "dotenv"
 // Constants
 const isDev = process.env.NODE_ENV === "development"
 
+function getChromeLikeUserAgent(): string {
+  // Some sites (Google, ChatGPT, Gemini) degrade or block embedded/Electron UAs.
+  // Use a Chrome-like UA so the in-app webview behaves closer to a normal browser.
+  if (process.platform === "darwin") {
+    return "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
+  }
+  if (process.platform === "win32") {
+    return "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
+  }
+  return "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
+}
+
 // Application State
 const state = {
   // Window management properties
@@ -193,6 +205,18 @@ if (!gotTheLock) {
 
 // Auth callback removed as we no longer use Supabase authentication
 
+// Make embedded webviews behave more like a normal browser.
+// This runs for every new webContents (including <webview> instances).
+app.on("web-contents-created", (_event, contents) => {
+  if (contents.getType() === "webview") {
+    try {
+      contents.setUserAgent(getChromeLikeUserAgent())
+    } catch (err) {
+      console.error("Failed to set webview user agent:", err)
+    }
+  }
+})
+
 // Window management functions
 async function createWindow(): Promise<void> {
   if (state.mainWindow) {
@@ -295,20 +319,18 @@ async function createWindow(): Promise<void> {
     state.mainWindow.webContents.openDevTools()
   }
   state.mainWindow.webContents.setWindowOpenHandler(({ url }) => {
-    console.log("Attempting to open URL:", url)
+    // For the in-app browser experience, do NOT force Google/OAuth links into the OS browser,
+    // otherwise sign-in sessions won't persist inside the webview.
     try {
-      const parsedURL = new URL(url);
-      const hostname = parsedURL.hostname;
-      const allowedHosts = ["google.com", "supabase.co"];
-      if (allowedHosts.includes(hostname) || hostname.endsWith(".google.com") || hostname.endsWith(".supabase.co")) {
-        shell.openExternal(url);
-        return { action: "deny" }; // Do not open this URL in a new Electron window
+      const parsed = new URL(url)
+      if (parsed.protocol !== "http:" && parsed.protocol !== "https:") {
+        return { action: "deny" }
       }
+      return { action: "allow" }
     } catch (error) {
-      console.error("Invalid URL %d in setWindowOpenHandler: %d" , url , error);
-      return { action: "deny" }; // Deny access as URL string is malformed or invalid
+      console.error("Invalid URL in setWindowOpenHandler:", url, error)
+      return { action: "deny" }
     }
-    return { action: "allow" };
   })
 
   // Enhanced screen capture resistance
@@ -480,12 +502,15 @@ function setWindowDimensions(width: number, height: number): void {
     const primaryDisplay = screen.getPrimaryDisplay()
     const workArea = primaryDisplay.workAreaSize
     const maxWidth = Math.floor(workArea.width * 0.5)
+    const minHeight = Math.floor(workArea.height * 0.6)
+    const maxHeight = Math.floor(workArea.height * 0.7)
+    const targetHeight = Math.max(minHeight, Math.min(Math.ceil(height), maxHeight))
 
     state.mainWindow.setBounds({
       x: Math.min(currentX, workArea.width - maxWidth),
       y: currentY,
       width: Math.min(width + 32, maxWidth),
-      height: Math.ceil(height)
+      height: targetHeight
     })
   }
 }

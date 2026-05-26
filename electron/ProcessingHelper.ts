@@ -277,7 +277,34 @@ export class ProcessingHelper {
         mainWindow.webContents.send("processing-status", { message: "Generating solution...", progress: 60 });
       }
 
-    const promptText = `Problem: ${problemInfo.problem_statement}\n\nConstraints: ${problemInfo.constraints}\n\nExample Input: ${problemInfo.example_input}\n\nExample Output: ${problemInfo.example_output}\n\nProvide two solutions in ${language}:\n1. Bruteforce Solution\n2. Optimal Solution\n\nFor each solution, include:\n- The complete, working code\n- Brief explanation of approach\n- Time and space complexity`;
+    const promptText = `Problem: ${problemInfo.problem_statement}
+
+Constraints: ${problemInfo.constraints}
+
+Example Input: ${problemInfo.example_input}
+
+Example Output: ${problemInfo.example_output}
+
+Return the answer in this EXACT format (very important):
+
+### Bruteforce (simple explanation)
+Write 3-6 short lines explaining the idea in easy language.
+
+\`\`\`${language}
+// full working code here
+\`\`\`
+
+### Optimal (simple explanation)
+Write 3-6 short lines explaining the idea in easy language.
+
+\`\`\`${language}
+// full working code here
+\`\`\`
+
+Rules:
+- Use ONLY these two code blocks (no extra code outside the fences).
+- Do NOT repeat the same code twice.
+- Keep explanations outside the code blocks.`;
 
       let responseContent;
 
@@ -305,14 +332,8 @@ export class ProcessingHelper {
         mainWindow.webContents.send("processing-status", { message: "Processing complete", progress: 100 });
       }
 
-      // Extract code from response
-      let code = "";
-      const codeMatch = responseContent.match(/```(?:\w+)?\s*([\s\S]*?)```/);
-      if (codeMatch) {
-        code = codeMatch[1].trim();
-      } else {
-        code = responseContent;
-      }
+      // Keep full response so the renderer can show 2 separate code blocks + explanations.
+      const code = responseContent;
 
       // Extract complexity
       const timeMatch = responseContent.match(/time\s*complexity[:\s]*O\([^)]+\)/i);
@@ -321,7 +342,7 @@ export class ProcessingHelper {
       const response = {
         ...problemInfo,
         code,
-        thoughts: [responseContent.substring(0, 500)],
+        thoughts: [],
         time_complexity: timeMatch ? timeMatch[0] : "See solution explanation",
         space_complexity: spaceMatch ? spaceMatch[0] : "See solution explanation"
       };

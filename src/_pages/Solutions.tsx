@@ -12,6 +12,125 @@ import Debug from "./Debug"
 import { useToast } from "../contexts/toast"
 import { COMMAND_KEY } from "../utils/platform"
 
+type FencedBlock =
+  | { type: "text"; text: string }
+  | { type: "code"; code: string; lang?: string }
+
+function parseFencedBlocks(input: string): FencedBlock[] {
+  // Normalize so ``` fences work even when the model writes them inline
+  // like: "Solution 1: ... ```cpp" (no preceding newline).
+  const normalized = input
+    .replace(/\r\n/g, "\n")
+    .replace(/([^\n])```/g, "$1\n```")
+    .replace(/```([^\n])/g, "```\n$1")
+
+  const lines = normalized.split("\n")
+  const blocks: FencedBlock[] = []
+
+  let inCode = false
+  let currentLang: string | undefined
+  let buffer: string[] = []
+
+  const flushText = () => {
+    if (buffer.length === 0) return
+    const text = buffer.join("\n")
+    buffer = []
+    if (text.trim().length === 0) return
+    blocks.push({ type: "text", text })
+  }
+
+  const flushCode = () => {
+    const code = buffer.join("\n")
+    buffer = []
+    blocks.push({ type: "code", code, lang: currentLang })
+    currentLang = undefined
+  }
+
+  for (const line of lines) {
+    const trimmed = line.trim()
+    if (trimmed.startsWith("```")) {
+      if (!inCode) {
+        flushText()
+        inCode = true
+        const lang = trimmed.slice(3).trim()
+        currentLang = lang || undefined
+      } else {
+        inCode = false
+        flushCode()
+      }
+      continue
+    }
+    buffer.push(line)
+  }
+
+  if (buffer.length > 0) {
+    if (inCode) flushCode()
+    else flushText()
+  }
+
+  // Merge adjacent text blocks
+  const merged: FencedBlock[] = []
+  for (const b of blocks) {
+    const last = merged[merged.length - 1]
+    if (b.type === "text" && last?.type === "text") {
+      last.text += "\n" + b.text
+    } else {
+      merged.push(b)
+    }
+  }
+  return merged
+}
+
+export function SolutionContentRenderer({
+  content,
+  fallbackLanguage
+}: {
+  content: string
+  fallbackLanguage: string
+}) {
+  const blocks = parseFencedBlocks(content)
+  const normalizedFallback =
+    fallbackLanguage === "golang" ? "go" : fallbackLanguage
+
+  return (
+    <div className="space-y-3">
+      {blocks.map((block, idx) => {
+        if (block.type === "text") {
+          return (
+            <div
+              key={`t-${idx}`}
+              className="text-[13px] leading-[1.5] text-gray-100 whitespace-pre-wrap"
+            >
+              {block.text}
+            </div>
+          )
+        }
+
+        const lang = (block.lang || normalizedFallback).toLowerCase()
+        return (
+          <div key={`c-${idx}`} className="overflow-x-auto rounded-md">
+            <SyntaxHighlighter
+              showLineNumbers
+              language={lang}
+              style={dracula}
+              customStyle={{
+                margin: 0,
+                padding: "1rem",
+                whiteSpace: "pre",
+                wordBreak: "normal",
+                backgroundColor: "rgba(22, 27, 34, 0.5)"
+              }}
+              wrapLongLines={false}
+            >
+              {block.code.replace(/\s+$/, "")}
+            </SyntaxHighlighter>
+          </div>
+        )
+      })}
+    </div>
+  )
+}
+
 export const ContentSection = ({
   title,
   content,
@@ -81,22 +200,10 @@ const SolutionSection = ({
           >
             {copied ? "Copied!" : "Copy"}
           </button>
-          <SyntaxHighlighter
-            showLineNumbers
-            language={currentLanguage == "golang" ? "go" : currentLanguage}
-            style={dracula}
-            customStyle={{
-              maxWidth: "100%",
-              margin: 0,
-              padding: "1rem",
-              whiteSpace: "pre-wrap",
-              wordBreak: "break-all",
-              backgroundColor: "rgba(22, 27, 34, 0.5)"
-            }}
-            wrapLongLines={true}
-          >
-            {content as string}
-          </SyntaxHighlighter>
+          <SolutionContentRenderer
+            content={content as string}
+            fallbackLanguage={currentLanguage}
+          />
         </div>
       )}
     </div>
@@ -523,27 +630,34 @@ const Solutions: React.FC<SolutionsProps> = ({
 
                 {solutionData && (
                   <>
-                    <ContentSection
-                      title={`My Thoughts (${COMMAND_KEY} + Arrow keys to scroll)`}
-                      content={
-                        thoughtsData && (
+                    {!!thoughtsData?.length && (
+                      <ContentSection
+                        title={`My Thoughts (${COMMAND_KEY} + Arrow keys to scroll)`}
+                        content={
                           <div className="space-y-3">
-                            <div className="space-y-1">
-                              {thoughtsData.map((thought, index) => (
-                                <div
-                                  key={index}
-                                  className="flex items-start gap-2"
-                                >
-                                  <div className="w-1 h-1 rounded-full bg-blue-400/80 mt-2 shrink-0" />
-                                  <div>{thought}</div>
-                                </div>
-                              ))}
-                            </div>
+                            {thoughtsData.some((t) => t.includes("```")) ? (
+                              <SolutionContentRenderer
+                                content={thoughtsData.join("\n\n")}
+                                fallbackLanguage={currentLanguage}
+                              />
+                            ) : (
+                              <div className="space-y-1">
+                                {thoughtsData.map((thought, index) => (
+                                  <div
+                                    key={index}
+                                    className="flex items-start gap-2"
+                                  >
+                                    <div className="w-1 h-1 rounded-full bg-blue-400/80 mt-2 shrink-0" />
+                                    <div>{thought}</div>
+                                  </div>
+                                ))}
+                              </div>
+                            )}
                           </div>
-                        )
-                      }
-                      isLoading={!thoughtsData}
-                    />
+                        }
+                        isLoading={false}
+                      />
+                    )}
 
                     <SolutionSection
                       title="Solution"
